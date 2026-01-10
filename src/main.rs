@@ -1,6 +1,7 @@
 mod application;
 mod config;
 mod domain;
+mod git;
 mod infrastructure;
 mod tui;
 
@@ -73,19 +74,39 @@ async fn main() -> anyhow::Result<()> {
         },
 
         Commands::Issues => {
-            todo!("Open current repo's Issues page");
+            let repo = git::get_github_repo()?;
+            let url = repo.url_for("issues");
+            open::that(&url)?;
+            if !cli.quiet {
+                println!("Opening {}", url);
+            }
         }
 
         Commands::Actions => {
-            todo!("Open current repo's Actions page");
+            let repo = git::get_github_repo()?;
+            let url = repo.url_for("actions");
+            open::that(&url)?;
+            if !cli.quiet {
+                println!("Opening {}", url);
+            }
         }
 
         Commands::Settings => {
-            todo!("Open current repo's Settings page");
+            let repo = git::get_github_repo()?;
+            let url = repo.url_for("settings");
+            open::that(&url)?;
+            if !cli.quiet {
+                println!("Opening {}", url);
+            }
         }
 
         Commands::Milestones => {
-            todo!("Open current repo's Milestones page");
+            let repo = git::get_github_repo()?;
+            let url = repo.url_for("milestones");
+            open::that(&url)?;
+            if !cli.quiet {
+                println!("Opening {}", url);
+            }
         }
 
         Commands::Watch { target } => match target {
