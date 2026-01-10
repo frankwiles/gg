@@ -1,6 +1,22 @@
 use crate::domain::{Org, Repo};
 use anyhow::{Context, Result};
 use octocrab::Octocrab;
+use serde::Deserialize;
+
+/// Represents a GitHub Actions workflow run
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+pub struct WorkflowRun {
+    pub id: u64,
+    pub name: String,
+    pub display_title: String,
+    pub status: Option<String>,
+    pub conclusion: Option<String>,
+    pub head_branch: String,
+    pub html_url: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
 
 /// GitHub API client for fetching user data
 pub struct GitHubClient {
@@ -134,6 +150,88 @@ impl GitHubClient {
         }
 
         Ok(repos)
+    }
+
+    /// Fetch workflow runs for a repository, optionally filtered by branch
+    /// Returns the most recent run, prioritizing runs on the specified branch
+    pub async fn fetch_workflow_runs(
+        &self,
+        owner: &str,
+        repo: &str,
+        branch: Option<&str>,
+    ) -> Result<Option<WorkflowRun>> {
+        let mut url = format!("/repos/{}/{}/actions/runs", owner, repo);
+
+        // Add branch filter if specified
+        if let Some(branch_name) = branch {
+            url.push_str(&format!("?branch={}", branch_name));
+        }
+
+        #[derive(Deserialize)]
+        struct WorkflowRunsResponse {
+            workflow_runs: Vec<WorkflowRunResponse>,
+        }
+
+        #[derive(Deserialize)]
+        struct WorkflowRunResponse {
+            id: u64,
+            name: String,
+            display_title: String,
+            status: Option<String>,
+            conclusion: Option<String>,
+            head_branch: String,
+            html_url: String,
+            created_at: String,
+            updated_at: String,
+        }
+
+        let response: WorkflowRunsResponse = self
+            .client
+            .get(&url, None::<&()>)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to fetch workflow runs for {}/{}",
+                    owner, repo
+                )
+            })?;
+
+        if response.workflow_runs.is_empty() {
+            return Ok(None);
+        }
+
+        // GitHub API returns runs ordered by most recent first
+        // Convert to our internal type
+        let runs: Vec<WorkflowRun> = response
+            .workflow_runs
+            .into_iter()
+            .map(|r| WorkflowRun {
+                id: r.id,
+                name: r.name,
+                display_title: r.display_title,
+                status: r.status,
+                conclusion: r.conclusion,
+                head_branch: r.head_branch,
+                html_url: r.html_url,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            })
+            .collect();
+
+        // Find the first in_progress or queued run
+        let running = runs.iter().find(|r| {
+            r.status
+                .as_ref()
+                .map(|s| s == "in_progress" || s == "queued")
+                .unwrap_or(false)
+        });
+
+        if let Some(run) = running {
+            return Ok(Some(run.clone()));
+        }
+
+        // Otherwise return the most recent completed run
+        Ok(Some(runs[0].clone()))
     }
 }
 

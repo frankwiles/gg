@@ -5,7 +5,7 @@ mod git;
 mod infrastructure;
 mod tui;
 
-use application::refresh_cache;
+use application::{refresh_cache, watch_action};
 use config::{parse_args, Commands};
 use infrastructure::{cache_path, Cache};
 
@@ -111,7 +111,11 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Watch { target } => match target {
             config::WatchCommands::Action => {
-                todo!("Show running or most recent action for current repo/branch");
+                let result = watch_action(token, cli.quiet).await?;
+                if !cli.quiet {
+                    println!("Opening: {}", result);
+                }
+                open::that(&result.url)?;
             }
         },
 

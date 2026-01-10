@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use git2::Repository;
 
 /// Represents a GitHub repository parsed from git config
@@ -71,6 +71,16 @@ pub fn get_github_repo() -> Result<GitHubRepo> {
 
     // Parse the URL to extract owner and repo name
     parse_github_url(remote_url)
+}
+
+/// Get the current branch name of the git repository
+pub fn get_current_branch() -> Result<String> {
+    let repo = find_git_repo()?;
+    let head = repo.head().context("Failed to get HEAD reference")?;
+    let branch_name = head
+        .shorthand()
+        .ok_or_else(|| anyhow!("HEAD is not a branch"))?;
+    Ok(branch_name.to_string())
 }
 
 /// Parse a GitHub remote URL (SSH or HTTPS) into owner and repo name
