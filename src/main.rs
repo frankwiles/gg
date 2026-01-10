@@ -2,6 +2,7 @@ mod application;
 mod config;
 mod domain;
 mod infrastructure;
+mod tui;
 
 use application::refresh_cache;
 use config::{parse_args, Commands};
@@ -17,7 +18,8 @@ async fn main() -> anyhow::Result<()> {
     // Default to Tui if no subcommand provided
     match cli.command.unwrap_or(Commands::Tui) {
         Commands::Tui => {
-            todo!("Launch TUI fuzzy finder");
+            let cache = Cache::open()?;
+            tui::run(cache)?;
         }
 
         Commands::Data { action } => match action {

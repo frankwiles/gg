@@ -64,7 +64,12 @@ impl GitHubClient {
         orgs.push(Org::new(
             current_user.id.0 as i64,
             current_user.login.clone(),
-            Some(current_user.name.clone().unwrap_or(current_user.login.clone())),
+            Some(
+                current_user
+                    .name
+                    .clone()
+                    .unwrap_or(current_user.login.clone()),
+            ),
             Some(current_user.avatar_url.to_string()),
         ));
 
@@ -134,7 +139,6 @@ impl GitHubClient {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_owner_map_logic() {
@@ -146,7 +150,7 @@ mod tests {
 
         // Test or_insert_with behavior
         let result = map.entry(456).or_insert_with(|| "new-org".to_string());
-        assert_eq!(result, "new-org".to_string());
+        assert_eq!(result, "new-org");
         assert_eq!(map.get(&456), Some(&"new-org".to_string()));
     }
 }

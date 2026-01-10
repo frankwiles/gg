@@ -24,3 +24,11 @@ tokio = { version = "1.49.0", features = ["full"] }
 [dev-dependencies]
 mockito = "1.5"
 tempfile = "3.14"
+
+[profile.release]
+opt-level = 3        # Maximum optimization (default, but explicit)
+lto = "fat"          # Link Time Optimization - significant perf boost
+codegen-units = 1    # Better optimization at cost of compile time
+strip = true         # Strip debug symbols from binary
+panic = "abort"      # Reduces binary size and can improve perf
+overflow-checks = false # Disable overflow checks in release
