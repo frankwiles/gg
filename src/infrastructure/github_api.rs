@@ -5,17 +5,12 @@ use serde::Deserialize;
 
 /// Represents a GitHub Actions workflow run
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
 pub struct WorkflowRun {
-    pub id: u64,
     pub name: String,
-    pub display_title: String,
     pub status: Option<String>,
     pub conclusion: Option<String>,
     pub head_branch: String,
     pub html_url: String,
-    pub created_at: String,
-    pub updated_at: String,
 }
 
 /// GitHub API client for fetching user data
@@ -174,15 +169,11 @@ impl GitHubClient {
 
         #[derive(Deserialize)]
         struct WorkflowRunResponse {
-            id: u64,
             name: String,
-            display_title: String,
             status: Option<String>,
             conclusion: Option<String>,
             head_branch: String,
             html_url: String,
-            created_at: String,
-            updated_at: String,
         }
 
         let response: WorkflowRunsResponse = self
@@ -206,15 +197,11 @@ impl GitHubClient {
             .workflow_runs
             .into_iter()
             .map(|r| WorkflowRun {
-                id: r.id,
                 name: r.name,
-                display_title: r.display_title,
                 status: r.status,
                 conclusion: r.conclusion,
                 head_branch: r.head_branch,
                 html_url: r.html_url,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
             })
             .collect();
 

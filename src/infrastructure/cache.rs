@@ -1,17 +1,14 @@
 use crate::domain::{Org, Repo};
 use anyhow::{Context, Result};
-use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::path::PathBuf;
 
 /// Cache file location following XDG base directory specification
 pub fn cache_path() -> Result<PathBuf> {
-    let base_dir = dirs::config_dir()
-        .context("Could not determine config directory")?;
+    let base_dir = dirs::config_dir().context("Could not determine config directory")?;
 
     let cache_dir = base_dir.join("g");
-    std::fs::create_dir_all(&cache_dir)
-        .context("Failed to create cache directory")?;
+    std::fs::create_dir_all(&cache_dir).context("Failed to create cache directory")?;
 
     Ok(cache_dir.join("cache.db"))
 }
@@ -46,23 +43,28 @@ impl Cache {
         // Set up pragmas for better performance
         exec("PRAGMA journal_mode = WAL")?;
         exec("PRAGMA synchronous = NORMAL")?;
-        exec("CREATE TABLE IF NOT EXISTS metadata (
+        exec(
+            "CREATE TABLE IF NOT EXISTS metadata (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
-            )")?;
+            )",
+        )?;
 
         // Create orgs table
-        exec("CREATE TABLE IF NOT EXISTS orgs (
+        exec(
+            "CREATE TABLE IF NOT EXISTS orgs (
                 id INTEGER PRIMARY KEY,
                 login TEXT UNIQUE NOT NULL,
                 name TEXT,
                 avatar_url TEXT,
                 last_accessed_at TEXT,
                 access_count INTEGER DEFAULT 0
-            )")?;
+            )",
+        )?;
 
         // Create repos table
-        exec("CREATE TABLE IF NOT EXISTS repos (
+        exec(
+            "CREATE TABLE IF NOT EXISTS repos (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
                 full_name TEXT UNIQUE NOT NULL,
@@ -74,7 +76,8 @@ impl Cache {
                 default_branch TEXT,
                 last_accessed_at TEXT,
                 access_count INTEGER DEFAULT 0
-            )")?;
+            )",
+        )?;
 
         // Create indexes for faster lookups
         exec("CREATE INDEX IF NOT EXISTS idx_repos_full_name ON repos(full_name)")?;
@@ -95,17 +98,13 @@ impl Cache {
 
     /// Get cache statistics
     pub fn stats(&self) -> Result<CacheStats> {
-        let org_count: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM orgs",
-            [],
-            |row| row.get(0),
-        )?;
+        let org_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM orgs", [], |row| row.get(0))?;
 
-        let repo_count: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM repos",
-            [],
-            |row| row.get(0),
-        )?;
+        let repo_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM repos", [], |row| row.get(0))?;
 
         let size_bytes = std::fs::metadata(cache_path()?)?.len();
 
@@ -150,12 +149,14 @@ impl Cache {
             // If no repos, delete all
             tx.execute("DELETE FROM repos", [])?;
         } else {
-            let placeholders = valid_owner_ids.iter()
+            let placeholders = valid_owner_ids
+                .iter()
                 .map(|_| "?")
                 .collect::<Vec<_>>()
                 .join(",");
             let query = format!("DELETE FROM repos WHERE owner_id NOT IN ({})", placeholders);
-            let params = valid_owner_ids.iter()
+            let params = valid_owner_ids
+                .iter()
                 .map(|id| id as &dyn rusqlite::ToSql)
                 .collect::<Vec<_>>();
             tx.execute(&query, params.as_slice())?;
@@ -188,21 +189,21 @@ impl Cache {
     /// Load all organizations from the cache
     pub fn load_orgs(&self) -> Result<Vec<Org>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, login, name, avatar_url, last_accessed_at, access_count FROM orgs"
+            "SELECT id, login, name, avatar_url, last_accessed_at, access_count FROM orgs",
         )?;
 
-        let orgs = stmt.query_map([], |row| {
-            Ok(Org {
-                id: row.get(0)?,
-                login: row.get(1)?,
-                name: row.get(2)?,
-                avatar_url: row.get(3)?,
-                last_accessed_at: row.get::<_, Option<String>>(4)?
-                    .map(|s| s.parse().unwrap()),
-                access_count: row.get(5)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+        let orgs = stmt
+            .query_map([], |row| {
+                Ok(Org {
+                    id: row.get(0)?,
+                    login: row.get(1)?,
+                    name: row.get(2)?,
+                    avatar_url: row.get(3)?,
+                    last_accessed_at: row.get::<_, Option<String>>(4)?.map(|s| s.parse().unwrap()),
+                    access_count: row.get(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(orgs)
     }
@@ -214,38 +215,56 @@ impl Cache {
              FROM repos"
         )?;
 
-        let repos = stmt.query_map([], |row| {
-            Ok(Repo {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                full_name: row.get(2)?,
-                owner_id: row.get(3)?,
-                owner_login: row.get(4)?,
-                private: row.get::<_, i32>(5)? != 0,
-                description: row.get(6)?,
-                language: row.get(7)?,
-                default_branch: row.get(8)?,
-                last_accessed_at: row.get::<_, Option<String>>(9)?
-                    .map(|s| s.parse().unwrap()),
-                access_count: row.get(10)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+        let repos = stmt
+            .query_map([], |row| {
+                Ok(Repo {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    full_name: row.get(2)?,
+                    owner_id: row.get(3)?,
+                    owner_login: row.get(4)?,
+                    private: row.get::<_, i32>(5)? != 0,
+                    description: row.get(6)?,
+                    language: row.get(7)?,
+                    default_branch: row.get(8)?,
+                    last_accessed_at: row.get::<_, Option<String>>(9)?.map(|s| s.parse().unwrap()),
+                    access_count: row.get(10)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(repos)
     }
 
     /// Update repo access information
-    #[allow(dead_code)]
     pub fn record_repo_access(&self, full_name: &str) -> Result<()> {
-        let now = Utc::now().to_rfc3339();
-        self.conn.execute(
-            "UPDATE repos
-             SET access_count = access_count + 1,
-                 last_accessed_at = ?1
-             WHERE full_name = ?2",
-            params![now, full_name],
-        )?;
+        // Load the repo, update via domain model, then save back
+        let mut repo = self.conn.query_row(
+            "SELECT id, name, full_name, owner_id, owner_login, private, description, language, default_branch, last_accessed_at, access_count
+             FROM repos WHERE full_name = ?1",
+            params![full_name],
+            |row| {
+                Ok(Repo {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    full_name: row.get(2)?,
+                    owner_id: row.get(3)?,
+                    owner_login: row.get(4)?,
+                    private: row.get::<_, i32>(5)? != 0,
+                    description: row.get(6)?,
+                    language: row.get(7)?,
+                    default_branch: row.get(8)?,
+                    last_accessed_at: row.get::<_, Option<String>>(9)?.map(|s| s.parse().unwrap()),
+                    access_count: row.get(10)?,
+                })
+            },
+        ).optional()?.ok_or_else(|| anyhow::anyhow!("Repo not found: {}", full_name))?;
+
+        // Use domain model to record access
+        repo.record_access();
+
+        // Save back to cache
+        self.store_repos(&[repo])?;
         Ok(())
     }
 }

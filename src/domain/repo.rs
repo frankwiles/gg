@@ -77,7 +77,6 @@ impl Repo {
     }
 
     /// Calculate a usage score for sorting (higher = more frequently used)
-    #[allow(dead_code)]
     pub fn score(&self) -> f64 {
         let days_since = match self.last_accessed_at {
             Some(last) => (Utc::now() - last).num_days().max(0) as f64,
@@ -87,7 +86,6 @@ impl Repo {
     }
 
     /// Record an access event (increments count and updates timestamp)
-    #[allow(dead_code)]
     pub fn record_access(&mut self) {
         self.access_count += 1;
         self.last_accessed_at = Some(Utc::now());
