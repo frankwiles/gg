@@ -3,259 +3,143 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
   test:
-    name: Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: macos-15
-            target: x86_64-apple-darwin
-          - os: macos-14
-            target: aarch64-apple-darwin
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-
+    name: Run Tests
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - name: Run tests
         run: cargo test --verbose --all-features
 
-  build:
-    name: Build (${{ matrix.target }})
+  release:
     needs: test
-    runs-on: ${{ matrix.os }}
+    name: Release - ${{ matrix.platform.release_for }}
+    runs-on: ${{ matrix.platform.os }}
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
+        platform:
+          - release_for: Linux-x86_64
+            os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: gg
+            binary_path: target/x86_64-unknown-linux-gnu/release/gg
             asset_name: gg-linux-x86_64
-          - os: ubuntu-latest
+
+          - release_for: Linux-x86_64-musl
+            os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            artifact_name: gg
+            binary_path: target/x86_64-unknown-linux-musl/release/gg
             asset_name: gg-linux-x86_64-musl
-          - os: macos-15
+
+          - release_for: macOS-x86_64
+            os: macos-15
             target: x86_64-apple-darwin
-            artifact_name: gg
+            binary_path: target/x86_64-apple-darwin/release/gg
             asset_name: gg-macos-x86_64
-          - os: macos-14
+
+          - release_for: macOS-aarch64
+            os: macos-14
             target: aarch64-apple-darwin
-            artifact_name: gg
+            binary_path: target/aarch64-apple-darwin/release/gg
             asset_name: gg-macos-aarch64
-          - os: windows-latest
+
+          - release_for: Windows-x86_64
+            os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: gg.exe
-            asset_name: gg-windows-x86_64
+            binary_path: target/x86_64-pc-windows-msvc/release/gg.exe
+            asset_name: gg-windows-x86_64.exe
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.platform.target }}
 
       - name: Install musl tools
-        if: matrix.target == 'x86_64-unknown-linux-musl'
+        if: matrix.platform.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get install -y musl-tools
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build release binary
-        run: cargo build --verbose --release --target ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --target ${{ matrix.platform.target }}
 
       - name: Strip binary (Linux/macOS)
         if: runner.os != 'Windows'
-        run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+        run: strip ${{ matrix.platform.binary_path }}
 
-      - name: Upload raw binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset_name }}-bin
-          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-
-      - name: Create archive (Unix)
+      - name: Generate SHA256 checksums
+        shell: bash
         if: runner.os != 'Windows'
         run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../${{ matrix.asset_name }}.tar.gz ${{ matrix.artifact_name }}
-          cd -
+          shasum -a 256 ${{ matrix.platform.binary_path }} > ${{ matrix.platform.asset_name }}.sha256
 
-      - name: Create archive (Windows)
+      - name: Generate SHA256 checksums (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          Compress-Archive -Path target/${{ matrix.target }}/release/${{ matrix.artifact_name }} -DestinationPath ${{ matrix.asset_name }}.zip
+          $hash = Get-FileHash ${{ matrix.platform.binary_path }} -Algorithm SHA256
+          $hash.Hash > ${{ matrix.platform.asset_name }}.sha256
 
-      - name: Upload archive artifact (Unix)
-        if: runner.os != 'Windows'
-        uses: actions/upload-artifact@v4
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
         with:
-          name: ${{ matrix.asset_name }}-archive
-          path: ${{ matrix.asset_name }}.tar.gz
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ matrix.platform.binary_path }}
+          asset_name: ${{ matrix.platform.asset_name }}
+          tag: ${{ github.ref }}
+          overwrite: true
 
-      - name: Upload archive artifact (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+      - name: Upload SHA256 checksums
+        uses: svenstaro/upload-release-action@v2
         with:
-          name: ${{ matrix.asset_name }}-archive
-          path: ${{ matrix.asset_name }}.zip
-
-      - name: Upload release asset (Unix)
-        if: runner.os != 'Windows'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ matrix.asset_name }}.tar.gz
-
-      - name: Upload release asset (Windows)
-        if: runner.os == 'Windows'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ matrix.asset_name }}.zip
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ matrix.platform.asset_name }}.sha256
+          asset_name: ${{ matrix.platform.asset_name }}.sha256
+          tag: ${{ github.ref }}
+          overwrite: true
 
   release-summary:
     name: Generate Release Summary
-    needs: build
+    needs: release
     runs-on: ubuntu-latest
     if: always()
 
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
       - name: Generate release summary
         run: |
           echo "# 🚀 Release ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "## 📦 Raw Binaries (Workflow Artifacts)" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 Download Binaries" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Quick downloads of the standalone executables:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Binary | Artifact Download |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|-------------------|" >> $GITHUB_STEP_SUMMARY
-
-          # Get the run ID from GitHub API
-          RUN_ID="${{ github.run_id }}"
-
-          for asset in artifacts/*-bin; do
-            if [ -d "$asset" ]; then
-              name=$(basename "$asset" | sed 's/-bin$//')
-              files=("$asset"/*)
-              file="${files[0]}"
-              filename=$(basename "$file")
-              artifact_url="https://github.com/${{ github.repository }}/actions/runs/${RUN_ID}"
-
-              # Get platform name
-              case "$name" in
-                *linux*) platform="Linux x86_64" ;;
-                *macos*x86_64*) platform="macOS (Intel)" ;;
-                *macos*aarch64*) platform="macOS (Apple Silicon)" ;;
-                *windows*) platform="Windows x86_64" ;;
-                *) platform="$name" ;;
-              esac
-
-              echo "| \`${platform}\` | \`${filename}\` | [📥 Binary](${artifact_url}) |" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📦 Release Archives (GitHub Release)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Compressed archives attached to the release:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Archive | Release Download |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|---------|------------------|" >> $GITHUB_STEP_SUMMARY
-
-          for asset in artifacts/*-archive; do
-            if [ -d "$asset" ]; then
-              name=$(basename "$asset" | sed 's/-archive$//')
-              files=("$asset"/*)
-              file="${files[0]}"
-              filename=$(basename "$file")
-
-              # Get platform name
-              case "$name" in
-                *linux*) platform="Linux x86_64" ;;
-                *macos*x86_64*) platform="macOS (Intel)" ;;
-                *macos*aarch64*) platform="macOS (Apple Silicon)" ;;
-                *windows*) platform="Windows x86_64" ;;
-                *) platform="$name" ;;
-              esac
-
-              echo "| \`${platform}\` | \`${filename}\` | [📥 Archive](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${filename}) |" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
-
+          echo "| Platform | Binary | SHA256 |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux x86_64 | [gg-linux-x86_64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-linux-x86_64) | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-linux-x86_64.sha256) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux x86_64 (musl) | [gg-linux-x86_64-musl](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-linux-x86_64-musl) | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-linux-x86_64-musl.sha256) |" >> $GITHUB_STEP_SUMMARY
+          echo "| macOS (Intel) | [gg-macos-x86_64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-macos-x86_64) | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-macos-x86_64.sha256) |" >> $GITHUB_STEP_SUMMARY
+          echo "| macOS (Apple Silicon) | [gg-macos-aarch64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-macos-aarch64) | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-macos-aarch64.sha256) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Windows x86_64 | [gg-windows-x86_64.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-windows-x86_64.exe) | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gg-windows-x86_64.exe.sha256) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 📋 Installation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo '### From raw binary:' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "# Download the binary for your platform from the artifacts above" >> $GITHUB_STEP_SUMMARY
+          echo "# Download the binary for your platform above" >> $GITHUB_STEP_SUMMARY
           echo "chmod +x gg  # or gg.exe on Windows" >> $GITHUB_STEP_SUMMARY
           echo "mv gg /usr/local/bin/  # or add to PATH" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo '### From release archive:' >> $GITHUB_STEP_SUMMARY
+          echo '### Verify checksum:' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "# Download and extract the archive for your platform" >> $GITHUB_STEP_SUMMARY
-          echo "tar xzf gg-*.tar.gz  # or unzip on Windows" >> $GITHUB_STEP_SUMMARY
-          echo "chmod +x gg" >> $GITHUB_STEP_SUMMARY
-          echo "mv gg /usr/local/bin/  # or add to PATH" >> $GITHUB_STEP_SUMMARY
+          echo "# On Linux/macOS:" >> $GITHUB_STEP_SUMMARY
+          echo 'shasum -a 256 -c gg-*.sha256' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# On Windows:" >> $GITHUB_STEP_SUMMARY
+          echo 'Get-FileHash gg.exe -Algorithm SHA256' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
