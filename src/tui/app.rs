@@ -26,6 +26,8 @@ pub struct App {
     total_orgs: usize,
     /// Total number of repos
     total_repos: usize,
+    /// Whether help is currently shown
+    show_help: bool,
 }
 
 impl App {
@@ -42,6 +44,7 @@ impl App {
             should_exit: false,
             total_orgs,
             total_repos,
+            show_help: false,
         }
     }
 
@@ -126,6 +129,16 @@ impl App {
         self.total_repos
     }
 
+    /// Check if help is currently shown
+    pub fn show_help(&self) -> bool {
+        self.show_help
+    }
+
+    /// Toggle help display
+    pub fn toggle_help(&mut self) {
+        self.show_help = !self.show_help;
+    }
+
     /// Tick the matcher (process pending pattern changes)
     pub fn tick(&mut self) {
         self.matcher.tick();
@@ -141,6 +154,11 @@ impl App {
                     .contains(crossterm::event::KeyModifiers::CONTROL)
                 {
                     return self.on_ctrl_key(c);
+                }
+                // Handle ? key for help
+                if c == '?' {
+                    self.toggle_help();
+                    return None;
                 }
                 self.on_char(c);
                 None
@@ -159,8 +177,14 @@ impl App {
             }
             KeyCode::Enter => self.on_enter(),
             KeyCode::Esc => {
-                self.on_exit();
-                None
+                // Close help if open, otherwise exit
+                if self.show_help {
+                    self.show_help = false;
+                    None
+                } else {
+                    self.on_exit();
+                    None
+                }
             }
             _ => None,
         }
