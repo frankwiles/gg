@@ -18,7 +18,7 @@ pub fn render(f: &mut Frame, app: &App) {
         .margin(0)
         .constraints(
             [
-                Constraint::Min(0),  // Main list area (flexible)
+                Constraint::Min(0),    // Main list area (flexible)
                 Constraint::Length(1), // Status bar
                 Constraint::Length(1), // Input line
             ]
@@ -64,9 +64,9 @@ fn render_list(f: &mut Frame, app: &App, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Repos")
+                .title("Github Repos")
                 .border_style(Style::default().fg(Color::Red))
-                .padding(ratatui::widgets::Padding::new(1, 1, 0, 0)),
+                .padding(ratatui::widgets::Padding::new(1, 1, 1, 1)),
         )
         .highlight_style(
             Style::default()
@@ -78,8 +78,7 @@ fn render_list(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(
         list,
         inner_area,
-        &mut ratatui::widgets::ListState::default()
-            .with_selected(Some(app.selected_index())),
+        &mut ratatui::widgets::ListState::default().with_selected(Some(app.selected_index())),
     );
 }
 
@@ -94,14 +93,12 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         match_count, total_orgs, total_repos
     );
 
-    let paragraph = Paragraph::new(Line::from(vec![
-        Span::styled(
-            status_text,
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]))
+    let paragraph = Paragraph::new(Line::from(vec![Span::styled(
+        status_text,
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )]))
     .alignment(Alignment::Center);
 
     f.render_widget(paragraph, area);
@@ -112,20 +109,15 @@ fn render_input_line(f: &mut Frame, app: &App, area: Rect) {
     let input = format!("> {}", app.input_pattern());
     let input_len = input.len();
 
-    let paragraph = Paragraph::new(Line::from(vec![
-        Span::styled(
-            input,
-            Style::default().fg(Color::White),
-        ),
-    ]))
+    let paragraph = Paragraph::new(Line::from(vec![Span::styled(
+        input,
+        Style::default().fg(Color::White),
+    )]))
     .alignment(Alignment::Left)
     .wrap(Wrap { trim: false });
 
     f.render_widget(paragraph, area);
 
     // Move cursor to end of input
-    f.set_cursor_position((
-        (input_len as u16).min(area.width.saturating_sub(1)),
-        area.y,
-    ));
+    f.set_cursor_position(((input_len as u16).min(area.width.saturating_sub(1)), area.y));
 }
