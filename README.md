@@ -12,7 +12,7 @@ A fast, keyboard-driven GitHub CLI tool.
 ## Installation
 
 ```bash
-cargo install gg
+cargo install gg-github
 ```
 
 Or download a pre-built binary for your OS from [our releases](https://github.com/frankwiles/gg/releases). 

@@ -1,7 +1,11 @@
 [package]
-name = "gg"
+name = "gg-github"
 version = "0.2.4"
 edition = "2021"
+
+[[bin]]
+name = "gg"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
