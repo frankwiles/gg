@@ -88,11 +88,14 @@ impl GitHubClient {
     }
 
     /// Fetch all repositories for the authenticated user
+    /// Includes personal repos and repos from all organizations
     /// Skips archived repositories
     pub async fn fetch_repos(&self) -> Result<Vec<Repo>> {
         let mut repos = Vec::new();
-        let mut page = 1u32;
+        let mut seen_ids = std::collections::HashSet::new();
 
+        // First fetch user's personal repos
+        let mut page = 1u32;
         loop {
             let page_repos: Vec<octocrab::models::Repository> = self
                 .client
@@ -104,13 +107,18 @@ impl GitHubClient {
                     None::<&()>,
                 )
                 .await
-                .context("Failed to fetch repositories")?;
+                .context("Failed to fetch user repositories")?;
 
             let count = page_repos.len();
 
             for repo in page_repos {
                 // Skip archived repos
                 if repo.archived.unwrap_or(false) {
+                    continue;
+                }
+
+                // Skip duplicates
+                if !seen_ids.insert(repo.id.0 as i64) {
                     continue;
                 }
 
@@ -142,6 +150,75 @@ impl GitHubClient {
             }
 
             page += 1;
+        }
+
+        // Then fetch repos for each organization
+        let orgs = self.fetch_orgs().await?;
+        for org in &orgs {
+            // Skip the user's personal login as we already fetched those repos
+            let current_user = self.client.current().user().await?;
+            if org.login == current_user.login {
+                continue;
+            }
+
+            let mut page = 1u32;
+            loop {
+                let page_repos: Vec<octocrab::models::Repository> = self
+                    .client
+                    .get(
+                        format!(
+                            "/orgs/{}/repos?page={}&per_page=100&sort=updated&type=all",
+                            org.login, page
+                        ),
+                        None::<&()>,
+                    )
+                    .await
+                    .with_context(|| {
+                        format!("Failed to fetch repositories for org {}", org.login)
+                    })?;
+
+                let count = page_repos.len();
+
+                for repo in page_repos {
+                    // Skip archived repos
+                    if repo.archived.unwrap_or(false) {
+                        continue;
+                    }
+
+                    // Skip duplicates
+                    if !seen_ids.insert(repo.id.0 as i64) {
+                        continue;
+                    }
+
+                    let owner = repo
+                        .owner
+                        .ok_or_else(|| anyhow::anyhow!("Repo missing owner"))?;
+                    let owner_id = owner.id.0 as i64;
+                    let owner_login = owner.login;
+
+                    repos.push(Repo::new(
+                        repo.id.0 as i64,
+                        repo.name.clone(),
+                        repo.full_name
+                            .unwrap_or_else(|| format!("{}/{}", owner_login, repo.name)),
+                        owner_id,
+                        owner_login,
+                        repo.private.unwrap_or(false),
+                        repo.description.as_ref().map(|d| d.to_string()),
+                        repo.language.as_ref().and_then(|l| match l {
+                            serde_json::Value::String(s) => Some(s.clone()),
+                            _ => None,
+                        }),
+                        repo.default_branch,
+                    ));
+                }
+
+                if count < 100 {
+                    break;
+                }
+
+                page += 1;
+            }
         }
 
         Ok(repos)
