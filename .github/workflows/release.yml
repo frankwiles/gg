@@ -120,6 +120,12 @@ jobs:
         if: runner.os != 'Windows'
         run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
+      - name: Upload raw binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}-bin
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
       - name: Create archive (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -132,18 +138,18 @@ jobs:
         run: |
           Compress-Archive -Path target/${{ matrix.target }}/release/${{ matrix.artifact_name }} -DestinationPath ${{ matrix.asset_name }}.zip
 
-      - name: Upload artifact (Unix)
+      - name: Upload archive artifact (Unix)
         if: runner.os != 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
+          name: ${{ matrix.asset_name }}-archive
           path: ${{ matrix.asset_name }}.tar.gz
 
-      - name: Upload artifact (Windows)
+      - name: Upload archive artifact (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
+          name: ${{ matrix.asset_name }}-archive
           path: ${{ matrix.asset_name }}.zip
 
       - name: Upload release asset (Unix)
@@ -172,30 +178,84 @@ jobs:
 
       - name: Generate release summary
         run: |
-          echo "# 🚀 Release Assets" >> $GITHUB_STEP_SUMMARY
+          echo "# 🚀 Release ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Binary downloads for **${{ github.ref_name }}**:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Binary | Download |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|----------|" >> $GITHUB_STEP_SUMMARY
 
-          for asset in artifacts/*; do
+          echo "## 📦 Raw Binaries (Workflow Artifacts)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Quick downloads of the standalone executables:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Binary | Artifact Download |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|-------------------|" >> $GITHUB_STEP_SUMMARY
+
+          # Get the run ID from GitHub API
+          RUN_ID="${{ github.run_id }}"
+
+          for asset in artifacts/*-bin; do
             if [ -d "$asset" ]; then
-              name=$(basename "$asset")
+              name=$(basename "$asset" | sed 's/-bin$//')
               files=("$asset"/*)
               file="${files[0]}"
               filename=$(basename "$file")
-              echo "| \`${name}\` | \`${filename}\` | [📥 Download](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${filename}) |" >> $GITHUB_STEP_SUMMARY
+              artifact_url="https://github.com/${{ github.repository }}/actions/runs/${RUN_ID}"
+
+              # Get platform name
+              case "$name" in
+                *linux*) platform="Linux x86_64" ;;
+                *macos*x86_64*) platform="macOS (Intel)" ;;
+                *macos*aarch64*) platform="macOS (Apple Silicon)" ;;
+                *windows*) platform="Windows x86_64" ;;
+                *) platform="$name" ;;
+              esac
+
+              echo "| \`${platform}\` | \`${filename}\` | [📥 Binary](${artifact_url}) |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 Release Archives (GitHub Release)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Compressed archives attached to the release:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Archive | Release Download |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|---------|------------------|" >> $GITHUB_STEP_SUMMARY
+
+          for asset in artifacts/*-archive; do
+            if [ -d "$asset" ]; then
+              name=$(basename "$asset" | sed 's/-archive$//')
+              files=("$asset"/*)
+              file="${files[0]}"
+              filename=$(basename "$file")
+
+              # Get platform name
+              case "$name" in
+                *linux*) platform="Linux x86_64" ;;
+                *macos*x86_64*) platform="macOS (Intel)" ;;
+                *macos*aarch64*) platform="macOS (Apple Silicon)" ;;
+                *windows*) platform="Windows x86_64" ;;
+                *) platform="$name" ;;
+              esac
+
+              echo "| \`${platform}\` | \`${filename}\` | [📥 Archive](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${filename}) |" >> $GITHUB_STEP_SUMMARY
             fi
           done
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 📋 Installation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo '### From raw binary:' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "# Download the appropriate binary for your platform above" >> $GITHUB_STEP_SUMMARY
-          echo "# Then:" >> $GITHUB_STEP_SUMMARY
-          echo "tar xzf gg-*.tar.gz" >> $GITHUB_STEP_SUMMARY
+          echo "# Download the binary for your platform from the artifacts above" >> $GITHUB_STEP_SUMMARY
+          echo "chmod +x gg  # or gg.exe on Windows" >> $GITHUB_STEP_SUMMARY
+          echo "mv gg /usr/local/bin/  # or add to PATH" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '### From release archive:' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Download and extract the archive for your platform" >> $GITHUB_STEP_SUMMARY
+          echo "tar xzf gg-*.tar.gz  # or unzip on Windows" >> $GITHUB_STEP_SUMMARY
           echo "chmod +x gg" >> $GITHUB_STEP_SUMMARY
           echo "mv gg /usr/local/bin/  # or add to PATH" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
