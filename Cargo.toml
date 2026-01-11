@@ -1,6 +1,6 @@
 [package]
 name = "gg-github"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2024"
 authors = ["Frank Wiles <frank@revsys.com>"]
 description = "A Github CLI tool to make it easier to get where you want to go on Github.com"
