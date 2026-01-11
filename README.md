@@ -38,7 +38,28 @@ Or use the `--token` flag with any command.
 
 ### TUI
 
+Run `gg` without a sub-command or `gg tui` if you want to be more explicit and it will 
+launch a TUI with *fzf-like* fuzzy-finding that is lightening quick even with hundreds 
+of repos in dozens of orgs.  
+
 ![Screenshot of gg CLI TUI](./images/tui-screenshot.png)
+
+#### TUI Usage 
+
+1. Type to search through your repos quickly
+2. Move the cursor with your arrow keys to the exact repo you need
+3. Press enter and it opens `https://github.com/<owner>/<repo>/` by default. 
+
+You can use these key combos to go more directly to what it is you need: 
+
+| Key Combo | Action |
+|-----------|--------|
+| `Ctrl+i` | Issues |
+| `Ctrl+m` | Milestones |
+| `Ctrl+p` | Pull Requests |
+| `Ctrl+a` | Actions |
+
+`Esc` or `Ctrl+d` will exit. 
 
 ### Commands
 
