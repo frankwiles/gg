@@ -5,9 +5,14 @@ mod git;
 mod infrastructure;
 mod tui;
 
+use clap::CommandFactory;
+use clap_complete::Shell;
+use std::io;
+
 use application::{refresh_cache, watch_action};
 use config::{parse_args, Commands};
 use infrastructure::{cache_path, Cache};
+use tui::matcher::RepoMatcher;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -120,16 +125,41 @@ async fn main() -> anyhow::Result<()> {
         },
 
         Commands::Raycast { action } => match action {
-            config::RaycastCommands::ListRepos => {
-                todo!("Return list of repos for Raycast to display");
-            }
-            config::RaycastCommands::Open { target } => {
-                todo!("Open repo/org URL: {}", target);
-            }
-            config::RaycastCommands::OpenView { target, view } => {
-                todo!("Open {} view for repo: {}", view, target);
+            config::RaycastCommands::Search { query, count, json } => {
+                let cache = Cache::open()?;
+                let repos = cache.load_repos()?;
+                let orgs = cache.load_orgs()?;
+
+                let mut matcher = RepoMatcher::new(repos, orgs);
+                matcher.update_pattern(query);
+                matcher.tick();
+
+                let results: Vec<String> = matcher
+                    .matches_sorted()
+                    .into_iter()
+                    .take(count)
+                    .map(|item| item.full_name.clone())
+                    .collect();
+
+                if json {
+                    println!("{}", serde_json::json!({ "items": results }));
+                } else {
+                    for result in results {
+                        println!("{}", result);
+                    }
+                }
             }
         },
+
+        Commands::Completions { shell } => {
+            let shell = shell.parse::<Shell>().map_err(|_| {
+                anyhow::anyhow!(
+                    "Invalid shell. Supported shells: bash, elvish, fish, powershell, zsh"
+                )
+            })?;
+            let mut cmd = config::Cli::command();
+            clap_complete::generate(shell, &mut cmd, "gg", &mut io::stdout());
+        }
     }
 
     Ok(())

@@ -53,6 +53,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: RaycastCommands,
     },
+
+    /// Generate shell completion scripts
+    Completions {
+        /// Shell type (bash, elvish, fish, powershell, zsh)
+        shell: String,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -77,15 +83,16 @@ pub enum WatchCommands {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum RaycastCommands {
-    /// Return list of repos for Raycast to display
-    ListRepos,
-    /// Open repo/org URL
-    Open { target: String },
-    /// Open specific view (issues/actions/prs) for repo
-    OpenView {
-        target: String,
-        #[arg(short, long)]
-        view: ViewType,
+    /// Search repos using fuzzy matching
+    Search {
+        /// Search query
+        query: String,
+        /// Maximum number of results to return
+        #[arg(short, long, default_value = "10")]
+        count: usize,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
 }
 

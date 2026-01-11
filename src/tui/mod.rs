@@ -1,5 +1,5 @@
 mod app;
-mod matcher;
+pub mod matcher;
 mod ui;
 
 pub use app::run;

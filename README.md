@@ -27,6 +27,32 @@ export GITHUB_TOKEN="ghp_..."
 
 Or use the `--token` flag with any command.
 
+### Shell Completions
+
+Generate shell completion scripts for your shell:
+
+```bash
+# For bash
+gg completions bash > ~/.local/share/bash-completion/completions/gg
+# or (for macOS with Homebrew)
+gg completions bash > $(brew --prefix)/etc/bash_completion.d/gg
+
+# For zsh
+gg completions zsh > ~/.zsh/completion/_gg
+# then add to your ~/.zshrc:
+# fpath=(~/.zsh/completion $fpath)
+# autoload -U compinit && compinit
+
+# For fish
+gg completions fish > ~/.config/fish/completions/gg.fish
+
+# For PowerShell
+gg completions powershell | Out-File -Encoding ASCII ~/.config/powershell/completions/gg.ps1
+
+# For elvish
+gg completions elvish > ~/.elvish/lib/gg.elv
+```
+
 ## Usage
 
 ### Global Options
