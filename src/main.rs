@@ -114,6 +114,15 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
+        Commands::Prs => {
+            let repo = git::get_github_repo()?;
+            let url = repo.url_for("pulls");
+            open::that(&url)?;
+            if !cli.quiet {
+                println!("Opening {}", url);
+            }
+        }
+
         Commands::Watch { target } => match target {
             config::WatchCommands::Action => {
                 let result = watch_action(token, cli.quiet).await?;

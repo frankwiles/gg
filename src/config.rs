@@ -42,6 +42,10 @@ pub enum Commands {
     /// Open the current repo's Milestones page
     Milestones,
 
+    /// Open the current repo's Pull Requests page
+    #[command(alias = "pulls")]
+    Prs,
+
     /// Watch/monitor commands
     Watch {
         #[command(subcommand)]

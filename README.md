@@ -133,6 +133,10 @@ Open the current repository's Settings page in your browser.
 
 Open the current repository's Milestones page in your browser.
 
+#### `gg prs` (alias: `gg pulls`)
+
+Open the current repository's Pull Requests page in your browser.
+
 #### `gg watch action`
 
 Open the currently running or most recently completed Github Action for the 
