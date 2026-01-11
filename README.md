@@ -38,6 +38,8 @@ Or use the `--token` flag with any command.
 
 ### TUI
 
+! [Screenshot of gg CLI TUI](./images/tui-screenshot.png)
+
 ### Commands
 
 #### `gg` (default)
