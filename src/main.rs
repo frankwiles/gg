@@ -169,6 +169,10 @@ async fn main() -> anyhow::Result<()> {
             let mut cmd = config::Cli::command();
             clap_complete::generate(shell, &mut cmd, "gg", &mut io::stdout());
         }
+
+        Commands::Version => {
+            println!("gg {}", env!("CARGO_PKG_VERSION"));
+        }
     }
 
     Ok(())

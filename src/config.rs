@@ -63,6 +63,9 @@ pub enum Commands {
         /// Shell type (bash, elvish, fish, powershell, zsh)
         shell: String,
     },
+
+    /// Show the current version
+    Version,
 }
 
 #[derive(Subcommand, Debug, Clone)]
