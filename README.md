@@ -11,6 +11,14 @@ A fast, keyboard-driven GitHub CLI tool.
 
 ## Installation
 
+You can install it from my Homebrew Tap with: 
+
+```shell
+brew install frankwiles/tools/gg
+```
+
+or build and install it with `cargo` 
+
 ```bash
 cargo install gg-github
 ```
