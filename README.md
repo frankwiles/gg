@@ -27,6 +27,16 @@ export GITHUB_TOKEN="ghp_..."
 
 Or use the `--token` flag with any command.
 
+## Setup
+
+Before using the TUI for the first time, you need to populate your local cache with your GitHub organizations and repositories:
+
+```bash
+gg data refresh
+```
+
+This command fetches all your orgs and repos from the GitHub API and stores them locally for fast searching.
+
 ### Shell Completions
 
 Generate shell completion scripts for your shell:
