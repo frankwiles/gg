@@ -134,6 +134,14 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 📋 Installation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### macOS (Homebrew):" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "brew install frankwiles/tools/gg" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Manual installation:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "# Download the binary for your platform above" >> $GITHUB_STEP_SUMMARY
           echo "chmod +x gg  # or gg.exe on Windows" >> $GITHUB_STEP_SUMMARY
