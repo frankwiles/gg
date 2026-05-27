@@ -155,6 +155,10 @@ Open the current repository's Milestones page in your browser.
 
 Open the current repository's Pull Requests page in your browser.
 
+#### `gg view`
+
+Open the current repository's root page in your browser.
+
 #### `gg watch action`
 
 Open the currently running or most recently completed Github Action for the 

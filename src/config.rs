@@ -64,6 +64,9 @@ pub enum Commands {
         shell: String,
     },
 
+    /// Open the current repo in the browser
+    View,
+
     /// Show the current version
     Version,
 }
@@ -139,5 +142,11 @@ mod tests {
         assert_eq!(ViewType::Issues.to_string(), "issues");
         assert_eq!(ViewType::Actions.to_string(), "actions");
         assert_eq!(ViewType::PullRequests.to_string(), "pulls");
+    }
+
+    #[test]
+    fn test_view_command_parsed() {
+        let cli = Cli::try_parse_from(["gg", "view"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::View)));
     }
 }
