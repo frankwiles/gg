@@ -170,6 +170,15 @@ async fn main() -> anyhow::Result<()> {
             clap_complete::generate(shell, &mut cmd, "gg", &mut io::stdout());
         }
 
+        Commands::View => {
+            let repo = git::get_github_repo()?;
+            let url = repo.base_url();
+            open::that(&url)?;
+            if !cli.quiet {
+                println!("Opening {}", url);
+            }
+        }
+
         Commands::Version => {
             println!("gg {}", env!("CARGO_PKG_VERSION"));
         }
