@@ -9,7 +9,9 @@ use clap::CommandFactory;
 use clap_complete::Shell;
 use std::io;
 
-use application::{refresh_cache, watch_action};
+use anyhow::Context;
+use application::watch_action::ActionResult;
+use application::{refresh_cache, watch_action as watch_action_fn};
 use config::{parse_args, Commands};
 use infrastructure::{cache_path, Cache};
 use tui::matcher::RepoMatcher;
@@ -124,12 +126,31 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Watch { target } => match target {
-            config::WatchCommands::Action => {
-                let result = watch_action(token, cli.quiet).await?;
-                if !cli.quiet {
-                    println!("Opening: {}", result);
+            config::WatchCommands::Action { trigger } => {
+                let run = watch_action_fn(token, cli.quiet, trigger.is_some()).await?;
+                let payload = serde_json::to_string(&run)?;
+
+                match trigger {
+                    Some(target) if is_url(&target) => {
+                        post_webhook(&target, &payload).await?;
+                        if !cli.quiet {
+                            println!("Webhook delivered to {}", target);
+                        }
+                    }
+                    Some(command) => {
+                        run_command_with_stdin(&command, &payload).await?;
+                        if !cli.quiet {
+                            println!("Command finished: {}", command);
+                        }
+                    }
+                    None => {
+                        let result = ActionResult::from_run(&run);
+                        if !cli.quiet {
+                            println!("Opening: {}", result);
+                        }
+                        open::that(&result.url)?;
+                    }
                 }
-                open::that(&result.url)?;
             }
         },
 
@@ -192,4 +213,119 @@ fn get_token(cli: &config::Cli) -> anyhow::Result<String> {
         .clone()
         .or_else(|| std::env::var("GITHUB_TOKEN").ok())
         .ok_or_else(|| anyhow::anyhow!("GitHub token required. Set GITHUB_TOKEN env var or use --token flag"))
+}
+
+/// Returns true if the target looks like an HTTP(S) URL.
+fn is_url(target: &str) -> bool {
+    target.starts_with("http://") || target.starts_with("https://")
+}
+
+/// Run a local command, passing the JSON payload on stdin.
+async fn run_command_with_stdin(command: &str, payload: &str) -> anyhow::Result<()> {
+    use std::process::Stdio;
+    use tokio::io::AsyncWriteExt;
+    use tokio::process::Command;
+
+    let mut child = Command::new(command)
+        .stdin(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("Failed to spawn command: {}", command))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(payload.as_bytes()).await?;
+    }
+
+    let status = child
+        .wait()
+        .await
+        .with_context(|| format!("Failed to wait for command: {}", command))?;
+
+    if !status.success() {
+        anyhow::bail!("Command {} exited with status: {}", command, status);
+    }
+
+    Ok(())
+}
+
+/// POST a JSON payload to the given URL.
+async fn post_webhook(url: &str, payload: &str) -> anyhow::Result<()> {
+    let client = reqwest::Client::new();
+    let response = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .body(payload.to_string())
+        .send()
+        .await
+        .with_context(|| format!("Failed to POST to {}", url))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        anyhow::bail!("Webhook {} returned {}: {}", url, status, body);
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_url() {
+        assert!(is_url("http://example.com/webhook"));
+        assert!(is_url("https://api.frankwiles.com/webhook/abc"));
+        assert!(!is_url("/path/to/command"));
+        assert!(!is_url("./command"));
+        assert!(!is_url("cat"));
+    }
+
+    #[tokio::test]
+    async fn test_run_command_with_stdin() {
+        let payload = r#"{"workflow_name":"test","branch":"main","url":"http://example.com"}"#;
+        run_command_with_stdin("cat", payload).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_run_command_with_stdin_failure() {
+        let err = run_command_with_stdin("false", "payload").await.unwrap_err();
+        assert!(err.to_string().contains("exited with status"));
+    }
+
+    #[tokio::test]
+    async fn test_post_webhook_success() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/webhook")
+            .match_header("Content-Type", "application/json")
+            .match_body(mockito::Matcher::JsonString(
+                r#"{"ok":true}"#.to_string(),
+            ))
+            .with_status(200)
+            .create_async()
+            .await;
+
+        post_webhook(&format!("{}/webhook", server.url()), r#"{"ok":true}"#)
+            .await
+            .unwrap();
+
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn test_post_webhook_failure() {
+        let mut server = mockito::Server::new_async().await;
+        let _mock = server
+            .mock("POST", "/webhook")
+            .with_status(500)
+            .with_body("boom")
+            .create_async()
+            .await;
+
+        let err = post_webhook(&format!("{}/webhook", server.url()), r#"{"ok":true}"#)
+            .await
+            .unwrap_err();
+
+        assert!(err.to_string().contains("returned 500"));
+    }
 }
