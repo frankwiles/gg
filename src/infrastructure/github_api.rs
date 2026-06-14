@@ -1,16 +1,24 @@
 use crate::domain::{Org, Repo};
 use anyhow::{Context, Result};
 use octocrab::Octocrab;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Represents a GitHub Actions workflow run
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowRun {
+    pub id: u64,
     pub name: String,
     pub status: Option<String>,
     pub conclusion: Option<String>,
     pub head_branch: String,
+    pub head_sha: Option<String>,
     pub html_url: String,
+    pub run_number: u64,
+    pub run_attempt: Option<u64>,
+    pub event: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub run_started_at: Option<String>,
 }
 
 /// GitHub API client for fetching user data
@@ -224,6 +232,60 @@ impl GitHubClient {
         Ok(repos)
     }
 
+    /// Fetch a specific workflow run by ID
+    pub async fn fetch_workflow_run(
+        &self,
+        owner: &str,
+        repo: &str,
+        run_id: u64,
+    ) -> Result<WorkflowRun> {
+        let url = format!("/repos/{}/{}/actions/runs/{}", owner, repo, run_id);
+
+        #[derive(Deserialize)]
+        struct WorkflowRunResponse {
+            id: u64,
+            name: String,
+            status: Option<String>,
+            conclusion: Option<String>,
+            head_branch: String,
+            head_sha: Option<String>,
+            html_url: String,
+            run_number: u64,
+            run_attempt: Option<u64>,
+            event: Option<String>,
+            created_at: Option<String>,
+            updated_at: Option<String>,
+            run_started_at: Option<String>,
+        }
+
+        let response: WorkflowRunResponse = self
+            .client
+            .get(&url, None::<&()>)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to fetch workflow run {} for {}/{}",
+                    run_id, owner, repo
+                )
+            })?;
+
+        Ok(WorkflowRun {
+            id: response.id,
+            name: response.name,
+            status: response.status,
+            conclusion: response.conclusion,
+            head_branch: response.head_branch,
+            head_sha: response.head_sha,
+            html_url: response.html_url,
+            run_number: response.run_number,
+            run_attempt: response.run_attempt,
+            event: response.event,
+            created_at: response.created_at,
+            updated_at: response.updated_at,
+            run_started_at: response.run_started_at,
+        })
+    }
+
     /// Fetch workflow runs for a repository, optionally filtered by branch
     /// Returns the most recent run, prioritizing runs on the specified branch
     pub async fn fetch_workflow_runs(
@@ -246,11 +308,19 @@ impl GitHubClient {
 
         #[derive(Deserialize)]
         struct WorkflowRunResponse {
+            id: u64,
             name: String,
             status: Option<String>,
             conclusion: Option<String>,
             head_branch: String,
+            head_sha: Option<String>,
             html_url: String,
+            run_number: u64,
+            run_attempt: Option<u64>,
+            event: Option<String>,
+            created_at: Option<String>,
+            updated_at: Option<String>,
+            run_started_at: Option<String>,
         }
 
         let response: WorkflowRunsResponse = self
@@ -274,11 +344,19 @@ impl GitHubClient {
             .workflow_runs
             .into_iter()
             .map(|r| WorkflowRun {
+                id: r.id,
                 name: r.name,
                 status: r.status,
                 conclusion: r.conclusion,
                 head_branch: r.head_branch,
+                head_sha: r.head_sha,
                 html_url: r.html_url,
+                run_number: r.run_number,
+                run_attempt: r.run_attempt,
+                event: r.event,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+                run_started_at: r.run_started_at,
             })
             .collect();
 
@@ -296,6 +374,31 @@ impl GitHubClient {
 
         // Otherwise return the most recent completed run
         Ok(Some(runs[0].clone()))
+    }
+
+    /// Poll a workflow run until it is no longer queued or in_progress.
+    /// Returns the final run state.
+    pub async fn wait_for_run_completion(
+        &self,
+        owner: &str,
+        repo: &str,
+        run_id: u64,
+        interval: std::time::Duration,
+    ) -> Result<WorkflowRun> {
+        loop {
+            let run = self.fetch_workflow_run(owner, repo, run_id).await?;
+            let is_done = run
+                .status
+                .as_ref()
+                .map(|s| s != "queued" && s != "in_progress" && s != "waiting" && s != "pending")
+                .unwrap_or(true);
+
+            if is_done {
+                return Ok(run);
+            }
+
+            tokio::time::sleep(interval).await;
+        }
     }
 }
 

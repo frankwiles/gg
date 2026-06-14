@@ -162,10 +162,23 @@ Open the current repository's root page in your browser.
 #### `gg watch action`
 
 Open the currently running or most recently completed Github Action for the 
-current branch. 
+current branch.
 
 ```bash
 gg watch action
+```
+
+You can optionally provide a command or a URL. When a command is provided, `gg`
+will wait for the action to finish and then pass the action run payload as JSON
+on the command's stdin. When a URL is provided, `gg` will wait for the action
+to finish and then POST the JSON payload to that URL.
+
+```bash
+# Run a local command with the action payload on stdin
+gg watch action /path/to/script
+
+# Webhook the action payload to a URL
+gg watch action https://api.frankwiles.com/my-webhooks/something-something-something
 ```
 
 #### `gg raycast <action>`

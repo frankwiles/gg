@@ -87,8 +87,15 @@ pub enum DataCommands {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum WatchCommands {
-    /// Show running or most recent action for current repo/branch
-    Action,
+    /// Show running or most recent action for current repo/branch.
+    /// If TRIGGER is a local command, the command is called with the action
+    /// payload as JSON on stdin. If TRIGGER is a URL, the payload is POSTed
+    /// to the URL. Otherwise the action is opened in the browser.
+    Action {
+        /// Path to a command or URL to receive the action payload
+        #[arg(value_name = "TRIGGER")]
+        trigger: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
