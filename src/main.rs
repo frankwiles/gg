@@ -231,9 +231,20 @@ async fn run_command_with_stdin(command: &str, payload: &str) -> anyhow::Result<
         .spawn()
         .with_context(|| format!("Failed to spawn command: {}", command))?;
 
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(payload.as_bytes()).await?;
-    }
+    // Write stdin in a background task so a command that exits quickly
+    // (closing its stdin) doesn't cause a broken-pipe error to shadow the
+    // actual process exit status.
+    let payload = payload.to_owned();
+    let stdin_task = if let Some(stdin) = child.stdin.take() {
+        Some(tokio::spawn(async move {
+            let mut stdin = stdin;
+            stdin.write_all(payload.as_bytes()).await?;
+            stdin.shutdown().await?;
+            Ok::<(), std::io::Error>(())
+        }))
+    } else {
+        None
+    };
 
     let status = child
         .wait()
@@ -241,7 +252,16 @@ async fn run_command_with_stdin(command: &str, payload: &str) -> anyhow::Result<
         .with_context(|| format!("Failed to wait for command: {}", command))?;
 
     if !status.success() {
+        // Await (and ignore) the stdin task so the command failure is always
+        // reported, even if the stdin write raced with process exit.
+        if let Some(task) = stdin_task {
+            let _ = task.await;
+        }
         anyhow::bail!("Command {} exited with status: {}", command, status);
+    }
+
+    if let Some(task) = stdin_task {
+        task.await??;
     }
 
     Ok(())
